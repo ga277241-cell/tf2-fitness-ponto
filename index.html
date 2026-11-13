@@ -1,0 +1,213 @@
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#111111">
+<title>tf2 fitness | controle de ponto</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101010;color:#fff;font-family:Arial,sans-serif}
+header{background:#191919;padding:24px 20px;border-bottom:2px solid #f47721}
+.logo{font-size:27px;font-weight:900}
+.logo span{color:#f47721}
+header p{color:#aaa;font-size:12px;margin:6px 0}
+main{max-width:550px;margin:auto;padding:20px}
+h2{font-size:20px}
+.card{background:#1d1d1d;border:1px solid #333;border-radius:14px;padding:18px;margin:15px 0}
+label{display:block;color:#bbb;font-size:13px;margin-bottom:9px}
+select,input{width:100%;padding:15px;background:#111;color:white;border:1px solid #444;border-radius:9px;font-size:16px}
+button{width:100%;padding:16px;border:0;border-radius:9px;background:#f47721;color:#111;font-weight:bold;font-size:15px;margin-top:10px;cursor:pointer}
+button:disabled{opacity:.35}
+.secondary{background:#333;color:white}
+.danger{background:#a83232;color:white}
+.time{text-align:center;font-size:39px;font-weight:bold;margin:12px}
+.date{text-align:center;color:#aaa;font-size:13px}
+.status{text-align:center;color:#f47721;font-weight:bold;padding:12px}
+.nav{display:flex;gap:8px}
+.nav button{flex:1;font-size:13px}
+.record{padding:12px 0;border-bottom:1px solid #383838;display:flex;justify-content:space-between;gap:10px;font-size:13px}
+small{color:#aaa}
+footer{text-align:center;color:#777;font-size:11px;padding:25px}
+.hidden{display:none}
+.notice{font-size:12px;color:#ffbd83;line-height:1.5}
+</style>
+</head>
+<body>
+<header>
+ <div class="logo">tf2 <span>fitness</span></div>
+ <p>sistema de controle de ponto</p>
+</header>
+
+<main>
+ <div class="time" id="clock">00:00:00</div>
+ <div class="date" id="today"></div>
+
+ <div class="nav">
+  <button onclick="showTab('ponto')">bater ponto</button>
+  <button class="secondary" onclick="showTab('historico')">histórico</button>
+ </div>
+
+ <section id="ponto">
+  <div class="card">
+   <h2>registro de jornada</h2>
+   <label>selecione seu nome</label>
+   <select id="employee" onchange="updateStatus()">
+    <option value="">escolha seu nome</option>
+    <option>anderson</option>
+    <option>larissa</option>
+    <option>marise</option>
+    <option>jô</option>
+    <option>lara</option>
+   </select>
+   <div class="status" id="status">aguardando identificação</div>
+   <button onclick="punch('entrada')" id="entrada">registrar entrada</button>
+   <button onclick="punch('intervalo')" id="intervalo" disabled>iniciar intervalo</button>
+   <button onclick="punch('retorno')" id="retorno" disabled>retornar do intervalo</button>
+   <button onclick="punch('saída')" id="saida" disabled>registrar saída</button>
+  </div>
+  <div class="card">
+   <h2>meus registros de hoje</h2>
+   <div id="todayRecords"><small>selecione seu nome para consultar.</small></div>
+  </div>
+ </section>
+
+ <section id="historico" class="hidden">
+  <div class="card">
+   <h2>histórico de registros</h2>
+   <label>funcionário</label>
+   <select id="filter" onchange="renderHistory()">
+    <option value="">todos</option>
+    <option>anderson</option>
+    <option>larissa</option>
+    <option>marise</option>
+    <option>jô</option>
+    <option>lara</option>
+   </select>
+   <div id="historyList"></div>
+   <button onclick="exportCSV()">exportar relatório csv</button>
+  </div>
+ </section>
+
+ <div class="card">
+  <p class="notice">versão inicial de demonstração. os registros ficam armazenados somente neste navegador. ainda não utilize como controle oficial de jornada.</p>
+ </div>
+</main>
+
+<footer>tf2 fitness • gestão de jornada</footer>
+
+<script>
+const employees=['anderson','larissa','marise','jô','lara'];
+
+function getRecords(){
+ try{return JSON.parse(localStorage.getItem('tf2_records')||'[]')}
+ catch(e){return []}
+}
+function saveRecords(data){
+ localStorage.setItem('tf2_records',JSON.stringify(data));
+}
+function dateKey(){
+ return new Date().toLocaleDateString('en-CA');
+}
+function formatDate(d){
+ return new Date(d).toLocaleDateString('pt-BR');
+}
+function now(){
+ return new Date().toLocaleTimeString('pt-BR');
+}
+function updateClock(){
+ document.getElementById('clock').textContent=new Date().toLocaleTimeString('pt-BR');
+ document.getElementById('today').textContent=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+}
+setInterval(updateClock,1000);
+updateClock();
+
+function employeeRecords(name){
+ return getRecords().filter(r=>r.employee===name && r.date===dateKey());
+}
+function nextAction(name){
+ const list=employeeRecords(name);
+ if(!list.length)return 'entrada';
+ const last=list[list.length-1].type;
+ if(last==='entrada')return 'intervalo';
+ if(last==='intervalo')return 'retorno';
+ if(last==='retorno')return 'saída';
+ return 'fim';
+}
+function updateStatus(){
+ const name=document.getElementById('employee').value;
+ const next=name?nextAction(name):'entrada';
+ const labels={
+ entrada:'pronto para iniciar expediente',
+ intervalo:'em expediente',
+ retorno:'em intervalo',
+ saída:'trabalhando após intervalo',
+ fim:'expediente encerrado'
+ };
+ document.getElementById('status').textContent=name?labels[next]:'aguardando identificação';
+ ['entrada','intervalo','retorno','saida'].forEach(id=>{
+  document.getElementById(id).disabled=true;
+ });
+ if(name && next!=='fim'){
+  const ids={entrada:'entrada',intervalo:'intervalo',retorno:'retorno','saída':'saida'};
+  document.getElementById(ids[next]).disabled=false;
+ }
+ renderToday();
+}
+function punch(type){
+ const name=document.getElementById('employee').value;
+ if(!name)return alert('selecione seu nome primeiro.');
+ const expected=nextAction(name);
+ if(expected!==type)return alert('essa etapa não está disponível.');
+ const data=getRecords();
+ data.push({
+  employee:name,
+  type:type,
+  date:dateKey(),
+  time:now(),
+  timestamp:new Date().toISOString()
+ });
+ saveRecords(data);
+ updateStatus();
+ alert('registro realizado: '+type);
+}
+function renderToday(){
+ const name=document.getElementById('employee').value;
+ const area=document.getElementById('todayRecords');
+ if(!name){area.innerHTML='<small>selecione seu nome para consultar.</small>';return}
+ const list=employeeRecords(name);
+ area.innerHTML=list.length?list.map(r=>
+  `<div class="record"><span>${r.type}</span><strong>${r.time}</strong></div>`
+ ).join(''):'<small>nenhum registro hoje.</small>';
+}
+function showTab(tab){
+ document.getElementById('ponto').classList.toggle('hidden',tab!=='ponto');
+ document.getElementById('historico').classList.toggle('hidden',tab!=='historico');
+ if(tab==='historico')renderHistory();
+}
+function renderHistory(){
+ const name=document.getElementById('filter').value;
+ const list=getRecords().filter(r=>!name||r.employee===name).reverse();
+ document.getElementById('historyList').innerHTML=list.length?
+ list.map(r=>`<div class="record"><span>${r.employee}<br><small>${formatDate(r.timestamp)} • ${r.type}</small></span><strong>${r.time}</strong></div>`).join(''):
+ '<small>nenhum registro encontrado.</small>';
+}
+function exportCSV(){
+ const rows=getRecords();
+ if(!rows.length)return alert('não existem registros para exportar.');
+ const csv='funcionario,data,horario,tipo\n'+rows.map(r=>
+  [r.employee,r.date,r.time,r.type].join(',')
+ ).join('\n');
+ const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement('a');
+ a.href=url;
+ a.download='relatorio-tf2-fitness.csv';
+ a.click();
+ URL.revokeObjectURL(url);
+}
+updateStatus();
+</script>
+</body>
+</html>
